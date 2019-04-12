@@ -1,0 +1,341 @@
+<HTML>
+<HEAD>
+<link rel="stylesheet" href="css/style.css">    
+<!-- version avec Drag and drop et multi-canvas -->
+    
+   
+<script>
+// get canvas related references
+ 
+var ongoingTouches = new Array();
+       
+function startup() {
+  var fond = document.getElementById("layer1");    
+  var el = document.getElementById("layer2");
+  el.addEventListener("pointerdown", handleStart, false);
+  el.addEventListener("pointerup", handleEnd, false);
+  el.addEventListener("pointercancel", handleCancel, false);
+  el.addEventListener("pointermove", handleMove, false);
+  
+    
+    // Draws a simple shape
+    ctx2 = el.getContext("2d");
+    ctx2.moveTo(300 , 300 );
+    ctx2.font = '64px arial';
+    ctx2.strokeText('Easypitch whiteboard', 30, 100);
+    //log("initialized.");
+}
+   
+function handleStart(e) {
+  //log("pointerdown: id = " + e.pointerId);
+  //log(e.pointerType); 
+     
+  
+    if (document.getElementById("color01").checked) {
+    tcolor = "yellow";
+  }else if (document.getElementById("color02").checked) {
+    tcolor = "orange";  
+  }else if (document.getElementById("color03").checked) {
+    tcolor = "blue";  
+  }else if (document.getElementById("color04").checked) {
+    tcolor = "green";  
+  }else if (document.getElementById("color05").checked) {
+    tcolor = "red";  
+  }else if (document.getElementById("color06").checked) {
+    tcolor = "cyan";  
+  }
+  //console.log(tcolor);
+  ongoingTouches.push(copyTouch(e));
+    
+    // -- Drag
+    // tell the browser we're handling this mouse event
+  e.preventDefault();
+  e.stopPropagation();
+
+  // get the current mouse position
+  var mx=parseInt(e.clientX-offsetX);
+  var my=parseInt(e.clientY-offsetY);
+
+  // test each shape to see if mouse is inside
+  dragok=false;
+  for(var i=0;i<shapes.length;i++){
+    var s=shapes[i];
+    // decide if the shape is a rect or circle               
+    if(s.width){
+      // test if the mouse is inside this rect
+      if(mx>s.x && mx<s.x+s.width && my>s.y && my<s.y+s.height){
+        // if yes, set that rects isDragging=true
+        dragok=true;
+        s.isDragging=true;
+      }
+    }else{
+      var dx=s.x-mx;
+      var dy=s.y-my;
+      // test if the mouse is inside this circle
+      if(dx*dx+dy*dy<s.r*s.r){
+        dragok=true;
+        s.isDragging=true;
+      }
+    }
+  }
+  // save the current mouse position
+  startX=mx;
+  startY=my;
+// end drag    
+}
+    
+function handleMove(e) {
+  var bErasing = false;   
+  var ph,pw, ps, pz; 
+  var plax=20;       
+  //var el = document.getElementById("layer2");
+  //var ctx2 = el.getContext("2d");
+  var color = colorForTouch(e);
+  var idx = ongoingTouchIndexById(e.pointerId);
+//log(e.pointerType);
+    // if we're dragging anything...
+  if (dragok){
+
+    // tell the browser we're handling this mouse event
+    e.preventDefault();
+    //e.stopPropagation();
+
+    // get the current mouse position
+    var mx=parseInt(e.clientX-offsetX);
+    var my=parseInt(e.clientY-offsetY);
+    //log(mx+ ","+my);
+    //log(e.pointerType);  
+    // calculate the distance the mouse has moved
+    // since the last mousemove
+    var dx=mx-startX;
+    var dy=my-startY;
+    // move each rect that isDragging 
+    // by the distance the mouse has moved
+    // since the last mousemove
+    for(var i=0;i<shapes.length;i++){
+      var s=shapes[i];
+      if(s.isDragging){
+        s.x+=dx;
+        s.y+=dy;
+      }
+    }
+    // redraw the scene with the new rect positions
+    draw();
+    // reset the starting mouse position for the next mousemove
+    startX=mx;
+    startY=my;
+  }
+
+  //log("continuing touch: idx =  " + idx);
+   //log(idx);  
+  if (idx >= 0 && dragok == false) {  
+    ph =  e.height;
+    pw = e.width; 
+    ps = ph * pw; 
+    //log (ps);  
+    if (ps> 200){
+        bErasing = true;  
+    }  else {
+        bErasing = false;
+    }
+      
+     //log("surface point: " + ps);  
+    ctx2.beginPath();
+    //log("ctx1.moveTo(" + ongoingTouches[idx].pageX + ", " + ongoingTouches[idx].pageY + ");");
+    ctx2.moveTo(ongoingTouches[idx].pageX -plax, ongoingTouches[idx].pageY-plax);
+    if(bErasing == true && dragok == false){
+         
+        ctx2.beginPath();
+        ctx2.globalCompositeOperation="destination-out";
+        ctx2.arc(e.clientX, e.clientY, 60,0,2 * Math.PI);
+        ctx2.fill();   
+    }
+    else {
+        //log("ctx1.lineTo(" + e.clientX + ", " + e.clientY + ");");
+        ctx2.globalCompositeOperation="source-over";
+        ctx2.lineTo(e.clientX -plax, e.clientY-plax);    
+        ctx2.lineWidth = 1;
+        ctx2.strokeStyle = tcolor;
+        ctx2.stroke();
+        ongoingTouches.splice(idx, 1, copyTouch(e));  // swap in the new touch record
+        //log(".");  
+    } 
+  } else {
+    //log("can't figure out which touch to continue: idx = " + idx);
+  }
+}
+function handleEnd(e) {
+  var idx = ongoingTouchIndexById(e.pointerId);
+  if (idx >= 0) {
+    ongoingTouches.splice(idx, 1);  // remove it; we're done
+  } 
+ // drag
+    // tell the browser we're handling this mouse event
+  e.preventDefault();
+  //e.stopPropagation();
+  dragok = false;
+  for(var i=0;i<shapes.length;i++){
+    shapes[i].isDragging=false;
+  }
+// end drag    
+    
+    
+}
+ 
+function handleCancel(evt) {
+  //log("pointercancel: id = " + evt.pointerId);
+  var idx = ongoingTouchIndexById(evt.pointerId);
+  ongoingTouches.splice(idx, 1);  // remove it; we're done
+}
+    
+function colorForTouch(touch) {
+  var r = touch.pointerId % 16;
+  var g = Math.floor(touch.pointerId / 3) % 16;
+  var b = Math.floor(touch.pointerId / 7) % 16;
+  r = r.toString(16); // make it a hex digit
+  g = g.toString(16); // make it a hex digit
+  b = b.toString(16); // make it a hex digit
+  var color = "#" + r + g + b;
+  //log("color for touch with identifier " + touch.pointerId + " = " + color);
+  return color;
+}
+function copyTouch(touch) {
+  return { identifier: touch.pointerId, pageX: touch.clientX, pageY: touch.clientY };
+}
+ function ongoingTouchIndexById(idToFind) {
+  for (var i = 0; i < ongoingTouches.length; i++) {
+    var id = ongoingTouches[i].identifier;
+    if (id == idToFind) {
+      return i;
+    }
+  }
+  return -1;    // not found
+}
+
+function log(msg) {
+  var p = document.getElementById('log');
+  p.innerHTML = msg + "\n" + p.innerHTML;
+}
+//<button onclick="startup()">Initialisation</button>
+</script>
+</HEAD>
+<BODY onload="startup()">
+
+<section id="main">
+		<canvas id="drawCanvas" width="300" height="300">Canvas is not supported on this browser!</canvas>
+
+		<section id="colorSwatch">
+			<input type="radio" name="color" id="color01" data-color="gold" checked><label for="color01"></label> 
+			<input type="radio" name="color" id="color02" data-color="darkorange">	<label for="color02"></label>  
+			<input type="radio" name="color" id="color03" data-color="navy">		<label for="color03"></label>  
+			<input type="radio" name="color" id="color04" data-color="yellowgreen">	<label for="color04"></label>  
+			<input type="radio" name="color" id="color05" data-color="firebrick">	<label for="color05"></label>  
+			<input type="radio" name="color" id="color06" data-color="powderblue">	<label for="color06"></label> 
+		</section>
+	</section>
+
+	<footer>
+		Powered by <a href="https://easypitch.com/blog" target="_blank">Easypitch</a><br>
+		Read the tutorial on <a href="https://easypitch.com/blog" target="_blank">Easypitch Blog</a>
+	</footer>     
+ 
+    
+<div id="canvasesdiv" style="position:relative; width:1200px; height:400px">
+
+<canvas id="layer1"
+style="z-index: 1;
+position:absolute;
+left:0px;
+top:0px; touch-action:none" height="400px" width="1200" >
+This text is displayed if your browser does not support HTML5 Canvas.
+</canvas>
+    
+<canvas id="layer2"
+style="z-index: 2;
+position:absolute;
+left:0px;
+top:0px; touch-action:none" height="400px" width="1200">
+This text is displayed if your browser does not support HTML5 Canvas.
+</canvas>
+
+
+</div>
+  
+    
+<!-- canvas    
+<canvas id="canvas" width="1200" height="600" style="touch-action:none">
+</canvas> 
+-->
+<!--    
+<br>
+Log: <pre id="log" style="border: 1px solid #ccc;"></pre>
+-->
+<script>
+    
+
+// get canvas related references
+var canvas1=document.getElementById("layer1");
+var ctx1=canvas1.getContext("2d");
+var canvas2 = document.getElementById("layer2");
+var ctx2 = canvas2.getContext("2d");    
+    
+var BB=canvas1.getBoundingClientRect();
+var offsetX=BB.left;
+var offsetY=BB.top;
+var WIDTH = canvas1.width;
+var HEIGHT = canvas1.height;
+var tcolor = "black"; 
+    
+// drag related variables
+var dragok = false;
+var startX;
+var startY;
+
+// an array of objects that define different shapes
+var shapes=[];
+// define 2 rectangles
+shapes.push({x:10,y:100,width:60,height:60,fill:"#444444",isDragging:false});
+shapes.push({x:80,y:100,width:60,height:60,fill:"#ff550d",isDragging:false});
+// define 2 circles
+shapes.push({x:150,y:100,r:50,fill:"#800080",isDragging:false});
+shapes.push({x:200,y:100,r:50,fill:"#9acd32",isDragging:false});
+
+draw();
+
+// draw a single rect
+function rect(r) {
+  ctx1.fillStyle=r.fill;
+  ctx1.fillRect(r.x,r.y,r.width,r.height);
+}
+
+// draw a single rect
+function circle(c) {
+  ctx1.fillStyle=c.fill;
+  ctx1.beginPath();
+  ctx1.arc(c.x,c.y,c.r,0,Math.PI*2);
+  ctx1.closePath();
+  ctx1.fill();
+}
+
+// clear the canvas
+function clear() {
+  ctx1.clearRect(0, 0, WIDTH, HEIGHT);
+}
+
+// redraw the scene
+function draw() {
+  clear();
+  // redraw each shape in the shapes[] array
+  for(var i=0;i<shapes.length;i++){
+    // decide if the shape is a rect or circle
+    // (it's a rect if it has a width property)
+    if(shapes[i].width){
+      rect(shapes[i]);
+    }else{
+      circle(shapes[i]);
+    };
+  }
+}     
+</script>    
+</BODY>
+    </HTML>
